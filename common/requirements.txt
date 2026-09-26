@@ -1,0 +1,4 @@
+opencv-python
+numpy
+tzdata  # time zone data for zoneinfo on Windows
+pandas  # only for results.load_results
