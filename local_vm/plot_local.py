@@ -8,6 +8,7 @@ from common.results import load_results
 
 def create_plot(csv_path: Path, output_path: Path) -> None:
     """Create a time series of the person count for each processed frame."""
+    import matplotlib.dates as mdates
     import matplotlib.pyplot as plt
 
     results = load_results(csv_path)
@@ -23,6 +24,15 @@ def create_plot(csv_path: Path, output_path: Path) -> None:
     )
     axis.set_ylim(bottom=0)
     axis.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
+    axis.xaxis.set_major_locator(
+        mdates.SecondLocator(
+            bysecond=range(0, 60, 5),
+            tz=results["timestamp"].dt.tz,
+        )
+    )
+    axis.xaxis.set_major_formatter(
+        mdates.DateFormatter("%H:%M:%S", tz=results["timestamp"].dt.tz)
+    )
     axis.grid(True, alpha=0.3)
     figure.autofmt_xdate()
     figure.tight_layout()
