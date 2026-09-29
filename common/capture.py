@@ -33,7 +33,10 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from results import make_frame_id, now_local
+if __package__:
+    from .results import make_frame_id, now_local
+else:
+    from results import make_frame_id, now_local
 
 # Camera id -> URL. The first one is the main camera; add the Part 4 ones here.
 CAMERAS = {
