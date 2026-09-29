@@ -24,15 +24,23 @@ def create_plot(csv_path: Path, output_path: Path) -> None:
     )
     axis.set_ylim(bottom=0)
     axis.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
+    timezone = results["timestamp"].dt.tz
     axis.xaxis.set_major_locator(
-        mdates.SecondLocator(
-            bysecond=range(0, 60, 5),
-            tz=results["timestamp"].dt.tz,
-        )
+        mdates.SecondLocator(bysecond=range(0, 60, 5), tz=timezone)
     )
-    axis.xaxis.set_major_formatter(
-        mdates.DateFormatter("%H:%M:%S", tz=results["timestamp"].dt.tz)
-    )
+    tick_positions = list(axis.get_xticks())
+    last_frame = results["timestamp"].iloc[-1].to_pydatetime()
+    last_tick = mdates.date2num(last_frame)
+    tick_positions.append(last_tick)
+    tick_positions.sort()
+    labels = []
+    for tick in tick_positions:
+        tick_time = mdates.num2date(tick, tz=timezone)
+        if abs(tick - last_tick) < 0.001 / 86400:
+            labels.append(tick_time.strftime("%H:%M:%S.%f")[:-3])
+        else:
+            labels.append(tick_time.strftime("%H:%M:%S"))
+    axis.set_xticks(tick_positions, labels)
     axis.grid(True, alpha=0.3)
     figure.autofmt_xdate()
     figure.tight_layout()
