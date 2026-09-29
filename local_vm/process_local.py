@@ -26,13 +26,22 @@ def non_negative_int(value: str) -> int:
     return parsed
 
 
-def count_people(model, frame, confidence: float) -> tuple[int, float]:
+def positive_int(value: str) -> int:
+    """Parse a strictly positive integer."""
+    parsed = int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be greater than zero")
+    return parsed
+
+
+def count_people(model, frame, confidence: float, image_size: int) -> tuple[int, float]:
     """Return the number of person detections and model inference time in ms."""
     started = time.perf_counter()
     predictions = model.predict(
         source=frame,
         classes=[0],
         conf=confidence,
+        imgsz=image_size,
         verbose=False,
     )
     inference_ms = (time.perf_counter() - started) * 1000
@@ -59,7 +68,9 @@ def run(args) -> int:
             else:
                 captured_at = now_local()
                 processing_started = time.perf_counter()
-                n_people, inference_ms = count_people(model, frame, args.confidence)
+                n_people, inference_ms = count_people(
+                    model, frame, args.confidence, args.image_size
+                )
                 response_time_ms = (time.perf_counter() - processing_started) * 1000
                 result = Result(
                     timestamp=captured_at,
@@ -98,9 +109,15 @@ def main() -> None:
     parser.add_argument("--count", type=non_negative_int, default=0)
     parser.add_argument("--model", default="yolov8n.pt", help="Ultralytics model or weights path")
     parser.add_argument("--confidence", type=float, default=0.25)
+    parser.add_argument(
+        "--image-size",
+        type=positive_int,
+        default=960,
+        help="YOLO inference image size in pixels (default: 960)",
+    )
     parser.add_argument("--csv", type=Path, default=DEFAULT_CSV)
     args = parser.parse_args()
-    if not 0 <= args.confidence <= 1:
+    if not math.isfinite(args.confidence) or not 0 <= args.confidence <= 1:
         parser.error("--confidence must be between 0 and 1")
     run(args)
 
