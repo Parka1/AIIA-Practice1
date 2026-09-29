@@ -4,3 +4,8 @@ Practice.md
 report/
 frames/
 .venv/
+__pycache__/
+*.pyc
+yolov8n.pt
+*.pdf
+credentials.env
