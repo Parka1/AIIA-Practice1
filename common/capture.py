@@ -41,6 +41,7 @@ else:
 # Camera id -> URL. The first one is the main camera; add the Part 4 ones here.
 CAMERAS = {
     "santa_pola": "https://www.skylinewebcams.com/es/webcam/espana/comunidad-valenciana/santa-pola/paseo-maritimo.html",
+    "grazalema": "https://www.skylinewebcams.com/es/webcam/espana/andalucia/cadiz/grazalema.html",
 }
 
 USER_AGENT = (

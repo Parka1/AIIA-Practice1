@@ -1,0 +1,6 @@
+Flask>=3.0,<4
+gunicorn>=22,<24
+psutil>=6,<8
+Pillow>=10,<13
+numpy>=1.26,<2
+opencv-python-headless==4.10.0.84

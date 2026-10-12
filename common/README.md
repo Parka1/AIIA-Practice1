@@ -16,7 +16,7 @@ Run from the repository root:
 python common/capture.py
 ```
 
-This saves one frame from the main camera (`santa_pola`) every 5 seconds into `frames/` until you press `Ctrl+C`. Each frame is printed as it is saved:
+This saves one frame from the default camera (`santa_pola`) every 5 seconds into `frames/` until you press `Ctrl+C`. The alternative `grazalema` camera is available for the Part 2 comparison. Each frame is printed as it is saved:
 
 ```
 [20:29:15] santa_pola_20260924T202915035.jpg 1920x1080 (1588 ms)
@@ -40,6 +40,9 @@ Examples:
 # 50 frames, one every 5 s (~4 minutes), e.g. to label the ground truth
 python common/capture.py --count 50 --out ground_truth
 
+# capture from the Grazalema plaza webcam instead of Santa Pola
+python common/capture.py --cam grazalema --count 10 --out frames-grazalema
+
 # one frame every 30 s until Ctrl+C
 python common/capture.py --interval 30
 ```
@@ -60,7 +63,7 @@ frame = get_frame(CAMERAS["santa_pola"])  # BGR numpy array, 1920x1080
 ```
 
 - `get_frame(cam_url)` opens the camera, reads one frame and closes it (~1.5 s for the Skyline stream). It raises `CaptureError` if the camera can't be read, so wrap it in `try/except` inside capture loops.
-- `CAMERAS` maps a camera id to its URL. Add the Part 4 cameras there. The id is the `cam_id` used in the CSV.
+- `CAMERAS` maps a camera id to its URL. It currently contains `santa_pola` (default) and `grazalema` (comparison camera); add further Part 4 cameras there. The id is the `cam_id` used in the CSV.
 - Supported URLs: SkylineWebcams pages, snapshot images (`.jpg`, `.jpeg`, `.png`) and anything OpenCV can open directly (MJPEG, RTSP, `.m3u8`, video files).
 
 ### How the SkylineWebcams capture works

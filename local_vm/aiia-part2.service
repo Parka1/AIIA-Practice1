@@ -1,0 +1,22 @@
+[Unit]
+Description=AIIA Practice 1 YOLOv8 inference service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aiia-vm
+Group=aiia-vm
+WorkingDirectory=/opt/aiia-part2
+EnvironmentFile=/etc/aiia-part2.env
+ExecStart=/opt/aiia-part2/venv/bin/gunicorn --bind 127.0.0.1:8765 --workers 1 --threads 2 --timeout 120 --access-logfile - --error-logfile - local_vm.vm_server:app
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/aiia-part2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,3 +1,4 @@
 -r ../common/requirements.txt
 ultralytics
 matplotlib
+requests
