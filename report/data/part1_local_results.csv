@@ -1,0 +1,4 @@
+timestamp,architecture,cam_id,frame_id,n_people,n_vehicles,response_time_ms,inference_ms,frame_bytes
+2026-09-29T16:26:39.504+02:00,local,santa_pola,santa_pola_20260929T162639504,0,,476.3,476.3,
+2026-09-29T16:26:44.251+02:00,local,santa_pola,santa_pola_20260929T162644251,0,,47.8,47.8,
+2026-09-29T16:26:49.269+02:00,local,santa_pola,santa_pola_20260929T162649269,2,,47.1,47.1,
