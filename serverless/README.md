@@ -26,7 +26,7 @@ Capture a frame every 5 seconds, send it to AI Vision and print the count and
 the capture and inference times. Nothing is uploaded to storage:
 
 ```sh
-.venv/Scripts/python -m serverless.probe_vision --cam grazalema --interval 5 --count 10 --save-dir frames/vision
+.venv/Scripts/python -m serverless.probe_vision --interval 5 --count 10 --save-dir frames/vision
 ```
 
 `--save-dir` stores the frames with the detected people drawn.
@@ -37,7 +37,7 @@ Capture a frame every 5 seconds and upload it to the private `raw-frames`
 container, which triggers the Azure Function:
 
 ```sh
-.venv/Scripts/python -m serverless.upload_frames --cam grazalema --interval 5 --count 10
+.venv/Scripts/python -m serverless.upload_frames --interval 5 --count 10
 ```
 
 Blobs are named `<frame_id>.jpg` and carry `cam_id`, `frame_id` and

@@ -43,7 +43,7 @@ def append_upload_log(path: Path, row: dict) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--cam", default="grazalema", choices=CAMERAS, help="camera id (default: grazalema)")
+    parser.add_argument("--cam", default="santa_pola", choices=CAMERAS, help="camera id (default: santa_pola)")
     parser.add_argument("--interval", type=float, default=5.0, help="seconds between frames (default: 5)")
     parser.add_argument("--count", type=int, default=0, help="frames to upload, 0 = until Ctrl+C")
     parser.add_argument("--quality", type=int, default=85, help="JPEG quality (default: 85, as in Part 2)")
