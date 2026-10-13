@@ -7,7 +7,9 @@ from collections import defaultdict
 from pathlib import Path
 
 
-def _count_errors(rows: list[dict[str, str]]) -> list[int]:
+def _count_errors(
+    rows: list[dict[str, str]], prediction_column: str = "yolo_count"
+) -> list[int]:
     if not rows:
         raise ValueError("at least one annotated frame is required")
 
@@ -24,7 +26,7 @@ def _count_errors(rows: list[dict[str, str]]) -> list[int]:
         if not camera_id:
             raise ValueError(f"row {line_number}: cam_id is required")
         truth_text = row.get("ground_truth_count", "").strip()
-        prediction_text = row.get("yolo_count", "").strip()
+        prediction_text = row.get(prediction_column, "").strip()
         if not truth_text:
             raise ValueError(
                 f"row {line_number}: fill in ground_truth_count before evaluation"
@@ -57,19 +59,21 @@ def _summarize_errors(errors: list[int]) -> dict[str, float | int]:
     }
 
 
-def evaluate_rows(rows: list[dict[str, str]]) -> dict[str, float | int]:
-    return _summarize_errors(_count_errors(rows))
+def evaluate_rows(
+    rows: list[dict[str, str]], prediction_column: str = "yolo_count"
+) -> dict[str, float | int]:
+    return _summarize_errors(_count_errors(rows, prediction_column))
 
 
 def evaluate_rows_by_camera(
-    rows: list[dict[str, str]],
+    rows: list[dict[str, str]], prediction_column: str = "yolo_count"
 ) -> dict[str, dict[str, float | int]]:
-    _count_errors(rows)
+    _count_errors(rows, prediction_column)
     groups: dict[str, list[dict[str, str]]] = defaultdict(list)
     for row in rows:
         groups[row["cam_id"].strip()].append(row)
     return {
-        camera_id: _summarize_errors(_count_errors(camera_rows))
+        camera_id: _summarize_errors(_count_errors(camera_rows, prediction_column))
         for camera_id, camera_rows in sorted(groups.items())
     }
 
