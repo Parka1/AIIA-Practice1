@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Serverless | Smart Lighting Monitor</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172235;
+      --muted: #67758a;
+      --line: #e4eaf1;
+      --surface: #fff;
+      --canvas: #f3f6fa;
+      --blue: #2864dc;
+      --blue-soft: #eaf0ff;
+      --orange: #d9741c;
+      --orange-soft: #fdf0e3;
+      --green: #13865b;
+      --red: #c2410c;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--canvas); color: var(--ink); }
+    header { background: #14233b; color: white; }
+    .header-inner, main { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
+    .header-inner { min-height: 82px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+    .brand { display: flex; align-items: center; gap: 13px; }
+    .brand-mark { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 11px; background: var(--orange); font-weight: 800; }
+    h1 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
+    .subtitle { margin-top: 4px; color: #b7c5dc; font-size: 12px; }
+    .status { display: flex; align-items: center; gap: 8px; color: #c7f4df; font-size: 12px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #33d18a; box-shadow: 0 0 0 4px #33d18a22; }
+    .status.idle { color: #f6d9b8; } .status.idle .dot { background: #f0a14a; box-shadow: 0 0 0 4px #f0a14a22; }
+    main { padding: 30px 0 44px; }
+    .intro { display: flex; justify-content: space-between; align-items: end; gap: 20px; margin-bottom: 20px; }
+    .intro h2 { margin: 0; font-size: 24px; letter-spacing: -.035em; }
+    .intro p { margin: 7px 0 0; color: var(--muted); font-size: 13px; }
+    .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; }
+    select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; }
+    .metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 13px; margin-bottom: 16px; }
+    .card, .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 2px 7px #1b355009; }
+    .card { min-height: 112px; padding: 17px 18px; }
+    .metric-label { color: var(--muted); font-size: 11px; font-weight: 650; letter-spacing: .055em; text-transform: uppercase; }
+    .metric-value { margin-top: 13px; font-size: 25px; font-weight: 730; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+    .metric-unit { margin-left: 4px; color: var(--muted); font-size: 12px; font-weight: 500; letter-spacing: 0; }
+    .metric-sub { margin-top: 5px; color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }
+    .grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; margin-bottom: 16px; }
+    .panel { padding: 19px 20px; min-width: 0; }
+    .panel-heading { display: flex; justify-content: space-between; align-items: start; gap: 12px; margin-bottom: 15px; }
+    h3 { margin: 0; font-size: 14px; letter-spacing: -.01em; }
+    .panel-note { margin-top: 5px; color: var(--muted); font-size: 11px; }
+    .tag { border-radius: 999px; background: var(--orange-soft); color: var(--orange); padding: 5px 9px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+    canvas { display: block; width: 100%; height: 225px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; color: var(--muted); font-size: 11px; }
+    .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+    .preview { width: 100%; min-height: 190px; max-height: 360px; object-fit: contain; border-radius: 8px; background: #101927; }
+    .empty { min-height: 190px; display: grid; place-items: center; border: 1px dashed #cbd5e1; border-radius: 8px; color: var(--muted); font-size: 13px; text-align: center; padding: 12px; }
+    [hidden] { display: none !important; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; white-space: nowrap; }
+    th { color: var(--muted); font-size: 10px; text-align: left; text-transform: uppercase; letter-spacing: .05em; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--line); }
+    td { font-variant-numeric: tabular-nums; }
+    td a { color: var(--blue); text-decoration: none; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .count-pill { display: inline-block; min-width: 26px; padding: 3px 7px; border-radius: 6px; background: #edf2f8; text-align: center; font-weight: 700; }
+    .error { color: var(--red); }
+    .footnote { margin: 12px 2px 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+    @media (max-width: 900px) { .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } .grid { grid-template-columns: minmax(0, 1fr); } }
+    @media (max-width: 560px) {
+      .header-inner, main { width: min(100% - 32px, 1180px); } .header-inner { min-height: 72px; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; } .card { min-height: 98px; padding: 14px; } .metric-value { font-size: 22px; }
+      .intro { align-items: start; flex-direction: column; } .panel { padding: 16px 14px; } .status { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-mark">AI</div>
+        <div><h1>Smart Lighting Monitor</h1><div class="subtitle">Azure Functions · Azure AI Vision person detection</div></div>
+      </div>
+      <div class="status idle" id="status"><span class="dot"></span><span id="status-text">Loading results</span></div>
+    </div>
+  </header>
+  <main>
+    <div class="intro">
+      <div><h2>Serverless processing</h2><p>Frames uploaded to Blob Storage and processed by a blob-triggered Azure Function</p></div>
+      <div class="controls">
+        <label>Camera <select id="camera"><option value="">All cameras</option></select></label>
+        <span>Refreshes every 5 s · <span id="updated-at">--</span></span>
+      </div>
+    </div>
+    <section class="metrics" aria-label="Serverless performance metrics">
+      <article class="card"><div class="metric-label">Frames processed</div><div class="metric-value" id="frames">0</div><div class="metric-sub" id="frames-sub"></div></article>
+      <article class="card"><div class="metric-label">Latest response</div><div class="metric-value" id="latest-response">--<span class="metric-unit">ms</span></div><div class="metric-sub" id="latest-sub"></div></article>
+      <article class="card"><div class="metric-label">Median response</div><div class="metric-value" id="median-response">--<span class="metric-unit">ms</span></div><div class="metric-sub">capture → result stored</div></article>
+      <article class="card"><div class="metric-label">AI Vision call</div><div class="metric-value" id="inference">--<span class="metric-unit">ms</span></div><div class="metric-sub" id="inference-sub">mean round trip</div></article>
+      <article class="card"><div class="metric-label">Estimated cost</div><div class="metric-value" id="cost">$0<span class="metric-unit"></span></div><div class="metric-sub" id="cost-sub">AI Vision S1 + Functions</div></article>
+    </section>
+    <section class="grid">
+      <article class="panel">
+        <div class="panel-heading"><div><h3>People over time</h3><div class="panel-note">People detected per frame (confidence ≥ 0.5)</div></div><span class="tag">AI Vision · people</span></div>
+        <canvas id="timeline" role="img" aria-label="People detected per frame over time"></canvas>
+        <div class="legend" id="timeline-legend"></div>
+      </article>
+      <article class="panel">
+        <div class="panel-heading"><div><h3>Latest processed frame</h3><div class="panel-note" id="preview-note">Bounding boxes drawn by the function</div></div><span class="tag">Live preview</span></div>
+        <div id="preview-empty" class="empty">Waiting for the first frame…</div>
+        <a id="preview-link" target="_blank" rel="noopener" hidden><img id="preview" class="preview" alt="Latest webcam frame annotated with the detected people"></a>
+      </article>
+    </section>
+    <section class="grid">
+      <article class="panel">
+        <div class="panel-heading"><div><h3>Response time breakdown</h3><div class="panel-note">Last 30 frames: upload + trigger, AI Vision call, drawing and storage</div></div></div>
+        <canvas id="breakdown" role="img" aria-label="Stacked response time per frame"></canvas>
+        <div class="legend">
+          <span style="--c:#9fb3cf">Capture → function start</span>
+          <span style="--c:#d9741c">AI Vision</span>
+          <span style="--c:#2864dc">Draw + store</span>
+        </div>
+      </article>
+      <article class="panel">
+        <div class="panel-heading"><div><h3>People count histogram</h3><div class="panel-note">Number of frames for each detected people count</div></div></div>
+        <canvas id="histogram" role="img" aria-label="Histogram of people detected per frame"></canvas>
+      </article>
+    </section>
+    <article class="panel table-wrap">
+      <div class="panel-heading"><div><h3>Recent detections</h3><div class="panel-note">Latest frames recorded by the function in data/results.csv and data/metrics.csv</div></div></div>
+      <table>
+        <thead><tr><th>Capture time</th><th>Camera</th><th>People</th><th>Boxes</th><th>AI Vision</th><th>Start delay</th><th>Response</th><th>Image</th><th>Cold start</th><th>Status</th></tr></thead>
+        <tbody id="results"><tr><td colspan="10">No frames processed yet</td></tr></tbody>
+      </table>
+    </article>
+    <p class="footnote" id="cost-note"></p>
+  </main>
+  <script>
+    // Retail prices (Azure Retail Prices API, October 2026), excluding free grants, taxes and discounts.
+    const PRICES = {
+      visionPerCall: 1.0 / 1000,      // AI Vision S1, Image Analysis Group 1, France Central (the F0 tier in use is free)
+      functionGbSecond: 0.000034,     // Flex Consumption on-demand execution time, Belgium Central
+      functionExecution: 0.000005 / 10, // Flex Consumption on-demand executions, Belgium Central
+      instanceGb: 0.5,                // 512 MB instance memory
+    };
+    const CAMERA_COLORS = ["#d9741c", "#2864dc", "#13865b", "#9333ea", "#c2410c", "#0f766e"];
+    const state = { results: [], metrics: new Map(), cameras: [] };
+
+    const number = (value, digits = 1) => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: digits });
+    const timeLabel = value => {
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? value : date.toLocaleTimeString([], { hour12: false });
+    };
+    const median = values => {
+      if (!values.length) return null;
+      const sorted = [...values].sort((a, b) => a - b), mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    };
+    const mean = values => values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
+    const escapeHtml = text => String(text).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+    function parseCsv(text) {
+      const rows = [];
+      let row = [], field = "", quoted = false;
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (quoted) {
+          if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+          else if (c === '"') quoted = false;
+          else field += c;
+        } else if (c === '"') quoted = true;
+        else if (c === ",") { row.push(field); field = ""; }
+        else if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
+        else if (c !== "\r") field += c;
+      }
+      if (field || row.length) { row.push(field); rows.push(row); }
+      const [header, ...body] = rows;
+      return header ? body.filter(r => r.length === header.length).map(r => Object.fromEntries(header.map((h, i) => [h, r[i]]))) : [];
+    }
+
+    async function fetchCsv(path) {
+      const response = await fetch(`${path}?t=${Date.now()}`, { cache: "no-store" });
+      if (response.status === 404) return [];
+      if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
+      return parseCsv(await response.text());
+    }
+
+    function setupCanvas(id, height = 225) {
+      const canvas = document.getElementById(id);
+      const rect = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+      canvas.height = Math.max(1, Math.floor(height * dpr));
+      const ctx = canvas.getContext("2d");
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, rect.width, height);
+      return { ctx, width: rect.width, height };
+    }
+
+    function emptyChart(ctx, width, height, message) {
+      ctx.fillStyle = "#748197"; ctx.font = "13px sans-serif"; ctx.textAlign = "center";
+      ctx.fillText(message, width / 2, height / 2);
+    }
+
+    // Integer axes have 3 gridlines, so round the maximum up to a multiple of 3.
+    const niceCountMax = value => Math.max(3, Math.ceil(value / 3) * 3);
+
+    function yAxis(ctx, { left, right, top, chartHeight, width }, max, format = v => String(Math.round(v))) {
+      ctx.strokeStyle = "#e5eaf1"; ctx.lineWidth = 1;
+      for (let i = 0; i <= 3; i++) {
+        const y = top + chartHeight * i / 3;
+        ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(width - right, y); ctx.stroke();
+        ctx.fillStyle = "#758197"; ctx.font = "10px sans-serif"; ctx.textAlign = "right";
+        ctx.fillText(format(max * (3 - i) / 3), left - 7, y + 3);
+      }
+    }
+
+    function drawTimeline(rows) {
+      const { ctx, width, height } = setupCanvas("timeline");
+      const legend = document.getElementById("timeline-legend");
+      if (!rows.length) { emptyChart(ctx, width, height, "The chart appears after the first processed frame"); legend.innerHTML = ""; return; }
+      const box = { left: 34, right: 14, top: 12, bottom: 30, width };
+      box.chartWidth = width - box.left - box.right; box.chartHeight = height - box.top - box.bottom;
+      const times = rows.map(r => new Date(r.timestamp).getTime());
+      const t0 = Math.min(...times), t1 = Math.max(...times), span = Math.max(t1 - t0, 1);
+      const max = niceCountMax(Math.max(...rows.map(r => Number(r.n_people))));
+      yAxis(ctx, box, max);
+      const x = t => box.left + (rows.length === 1 ? box.chartWidth / 2 : box.chartWidth * (t - t0) / span);
+      const y = v => box.top + box.chartHeight * (1 - v / max);
+      const cameras = [...new Set(rows.map(r => r.cam_id))];
+      cameras.forEach(cam => {
+        const color = CAMERA_COLORS[state.cameras.indexOf(cam) % CAMERA_COLORS.length];
+        const points = rows.filter(r => r.cam_id === cam);
+        ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
+        ctx.beginPath();
+        points.forEach((r, i) => {
+          const px = x(new Date(r.timestamp).getTime()), py = y(Number(r.n_people));
+          i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+        });
+        ctx.stroke();
+        if (points.length <= 60) points.forEach(r => {
+          ctx.beginPath(); ctx.arc(x(new Date(r.timestamp).getTime()), y(Number(r.n_people)), 3, 0, 2 * Math.PI); ctx.fill();
+        });
+      });
+      ctx.fillStyle = "#64748b"; ctx.font = "10px sans-serif";
+      ctx.textAlign = "left"; ctx.fillText(timeLabel(t0), box.left, height - 10);
+      ctx.textAlign = "right"; ctx.fillText(timeLabel(t1), width - box.right, height - 10);
+      legend.innerHTML = cameras.map(cam =>
+        `<span style="--c:${CAMERA_COLORS[state.cameras.indexOf(cam) % CAMERA_COLORS.length]}">${escapeHtml(cam)}</span>`).join("");
+    }
+
+    function drawBreakdown(rows) {
+      const { ctx, width, height } = setupCanvas("breakdown");
+      const data = rows.slice(-30).map(r => state.metrics.get(r.frame_id)).filter(m => m && m.status === "ok");
+      if (!data.length) { emptyChart(ctx, width, height, "Timings appear after the first processed frame"); return; }
+      const box = { left: 44, right: 10, top: 12, bottom: 16, width };
+      box.chartWidth = width - box.left - box.right; box.chartHeight = height - box.top - box.bottom;
+      const parts = m => {
+        const start = Number(m.start_delay_ms), vision = Number(m.inference_ms);
+        return [start, vision, Math.max(Number(m.response_time_ms) - start - vision, 0)];
+      };
+      const max = Math.max(...data.map(m => parts(m).reduce((a, b) => a + b, 0)));
+      yAxis(ctx, box, max, v => `${(v / 1000).toFixed(1)}s`);
+      const step = box.chartWidth / data.length, barWidth = Math.max(3, Math.min(22, step * .65));
+      data.forEach((m, i) => {
+        let base = box.top + box.chartHeight;
+        parts(m).forEach((value, j) => {
+          const h = box.chartHeight * value / max;
+          ctx.fillStyle = ["#9fb3cf", "#d9741c", "#2864dc"][j];
+          ctx.fillRect(box.left + step * i + (step - barWidth) / 2, base - h, barWidth, h);
+          base -= h;
+        });
+      });
+    }
+
+    function drawHistogram(rows) {
+      const { ctx, width, height } = setupCanvas("histogram");
+      if (!rows.length) { emptyChart(ctx, width, height, "The histogram appears after the first processed frame"); return; }
+      const counts = new Map();
+      rows.forEach(r => counts.set(Number(r.n_people), (counts.get(Number(r.n_people)) || 0) + 1));
+      const bins = [...counts.keys()].sort((a, b) => a - b);
+      const max = niceCountMax(Math.max(...bins.map(b => counts.get(b))));
+      const box = { left: 34, right: 12, top: 12, bottom: 36, width };
+      box.chartWidth = width - box.left - box.right; box.chartHeight = height - box.top - box.bottom;
+      yAxis(ctx, box, max);
+      const step = box.chartWidth / bins.length, barWidth = Math.min(52, step * .58);
+      bins.forEach((bin, i) => {
+        const value = counts.get(bin), h = box.chartHeight * value / max;
+        const x = box.left + step * i + (step - barWidth) / 2, y = box.top + box.chartHeight - h;
+        ctx.fillStyle = "#d9741c"; ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x, y, barWidth, h, [5, 5, 0, 0]); else ctx.rect(x, y, barWidth, h);
+        ctx.fill();
+        ctx.fillStyle = "#172235"; ctx.font = "11px sans-serif"; ctx.textAlign = "center";
+        ctx.fillText(String(value), x + barWidth / 2, Math.max(box.top + 11, y - 5));
+        ctx.fillStyle = "#64748b"; ctx.fillText(String(bin), box.left + step * i + step / 2, height - 12);
+      });
+      ctx.fillStyle = "#64748b"; ctx.font = "10px sans-serif"; ctx.textAlign = "center";
+      ctx.fillText("People detected per frame", box.left + box.chartWidth / 2, height - 1);
+    }
+
+    function functionCost(metrics) {
+      // Flex Consumption bills at least 1 s per execution, then rounds up to 100 ms.
+      return metrics.reduce((total, m) => {
+        const seconds = Math.max(1, Math.ceil(Number(m.function_ms || 0) / 100) / 10);
+        return total + seconds * PRICES.instanceGb * PRICES.functionGbSecond + PRICES.functionExecution;
+      }, 0);
+    }
+
+    function render() {
+      const camera = document.getElementById("camera").value;
+      const rows = state.results.filter(r => !camera || r.cam_id === camera);
+      const metrics = [...state.metrics.values()].filter(m => !camera || m.cam_id === camera);
+      const errors = metrics.filter(m => m.status !== "ok");
+      const latest = rows.at(-1);
+
+      document.getElementById("frames").textContent = number(rows.length, 0);
+      document.getElementById("frames-sub").textContent =
+        `${number(metrics.filter(m => m.cold_start === "1").length, 0)} cold starts · ${number(errors.length, 0)} AI Vision errors`;
+      document.getElementById("latest-response").innerHTML = `${latest ? number(latest.response_time_ms) : "--"}<span class="metric-unit">ms</span>`;
+      document.getElementById("latest-sub").textContent = latest ? `${latest.cam_id} · ${timeLabel(latest.timestamp)}` : "";
+      const responses = rows.map(r => Number(r.response_time_ms));
+      document.getElementById("median-response").innerHTML = `${responses.length ? number(median(responses)) : "--"}<span class="metric-unit">ms</span>`;
+      const inference = rows.map(r => Number(r.inference_ms));
+      const retries = metrics.reduce((total, m) => total + Number(m.vision_retries || 0), 0);
+      document.getElementById("inference").innerHTML = `${inference.length ? number(mean(inference)) : "--"}<span class="metric-unit">ms</span>`;
+      document.getElementById("inference-sub").textContent = `mean round trip · ${number(retries, 0)} HTTP 429 retries`;
+
+      const visionCost = metrics.length * PRICES.visionPerCall, fnCost = functionCost(metrics);
+      const total = visionCost + fnCost;
+      document.getElementById("cost").innerHTML = `$${number(total, 4)}`;
+      document.getElementById("cost-sub").textContent =
+        `$${number(metrics.length ? total / metrics.length * 1000 : 0, 3)} per 1,000 frames`;
+      document.getElementById("cost-note").textContent =
+        `Estimated cost for the frames shown: AI Vision $${number(visionCost, 4)} (${metrics.length} calls × $${PRICES.visionPerCall} at the S1 rate; ` +
+        `the F0 tier in use is free) + Azure Functions $${number(fnCost, 5)} (Flex Consumption, 512 MB, at least 1 s per execution). ` +
+        "Retail prices from the Azure Retail Prices API; excludes free grants, storage transactions, egress, taxes and discounts.";
+
+      drawTimeline(rows);
+      drawBreakdown(rows);
+      drawHistogram(rows);
+
+      const body = document.getElementById("results");
+      const recent = [...state.metrics.values()].filter(m => !camera || m.cam_id === camera).slice(-12).reverse();
+      body.innerHTML = recent.length ? recent.map(m => {
+        const ok = m.status === "ok";
+        return `<tr><td>${timeLabel(m.captured_at)}</td><td>${escapeHtml(m.cam_id)}</td>` +
+          `<td>${ok ? `<span class="count-pill">${m.n_people}</span>` : "--"}</td><td>${ok ? m.boxes : "--"}</td>` +
+          `<td>${ok ? number(m.inference_ms) + " ms" : "--"}</td><td>${number(m.start_delay_ms)} ms</td>` +
+          `<td>${ok ? number(m.response_time_ms) + " ms" : "--"}</td>` +
+          `<td>${ok ? `<a href="frames/${encodeURIComponent(m.frame_id)}.jpg" target="_blank" rel="noopener">${number(Number(m.frame_bytes) / 1024)} KiB</a>` : number(Number(m.frame_bytes) / 1024) + " KiB"}</td>` +
+          `<td>${m.cold_start === "1" ? "yes" : "no"}</td><td class="${ok ? "" : "error"}">${escapeHtml(m.status)}</td></tr>`;
+      }).join("") : '<tr><td colspan="10">No frames processed yet</td></tr>';
+
+      const link = document.getElementById("preview-link");
+      if (latest) {
+        const src = `frames/${encodeURIComponent(latest.frame_id)}.jpg`;
+        if (link.getAttribute("href") !== src) { link.href = src; document.getElementById("preview").src = src; }
+        link.hidden = false;
+        document.getElementById("preview-empty").hidden = true;
+        document.getElementById("preview-note").textContent = `${latest.frame_id} · ${latest.n_people} people detected`;
+      } else {
+        link.hidden = true;
+        document.getElementById("preview-empty").hidden = false;
+      }
+    }
+
+    async function refresh() {
+      const status = document.getElementById("status"), statusText = document.getElementById("status-text");
+      try {
+        const [results, metrics] = await Promise.all([fetchCsv("data/results.csv"), fetchCsv("data/metrics.csv")]);
+        state.results = results.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        state.metrics = new Map(metrics.sort((a, b) => new Date(a.captured_at) - new Date(b.captured_at)).map(m => [m.frame_id, m]));
+        const cameras = [...new Set(metrics.map(m => m.cam_id))].sort();
+        if (cameras.join() !== state.cameras.join()) {
+          state.cameras = cameras;
+          const select = document.getElementById("camera"), selected = select.value;
+          select.innerHTML = '<option value="">All cameras</option>' + cameras.map(c => `<option>${escapeHtml(c)}</option>`).join("");
+          select.value = cameras.includes(selected) ? selected : "";
+        }
+        const latest = state.results.at(-1);
+        const recent = latest && Date.now() - new Date(latest.timestamp).getTime() < 60000;
+        status.classList.toggle("idle", !recent);
+        statusText.textContent = recent ? "Receiving frames" : latest ? "Idle · no frames in the last minute" : "Waiting for frames";
+        document.getElementById("updated-at").textContent = new Date().toLocaleTimeString([], { hour12: false });
+        render();
+      } catch (error) {
+        status.classList.add("idle");
+        statusText.textContent = "Results unavailable";
+        console.error("Could not refresh the dashboard", error);
+      }
+    }
+
+    document.getElementById("camera").addEventListener("change", render);
+    let resizeTimer;
+    window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 120); });
+    refresh();
+    setInterval(refresh, 5000);
+  </script>
+</body>
+</html>

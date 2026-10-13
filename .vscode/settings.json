@@ -1,0 +1,8 @@
+{
+  "azureFunctions.projectSubpath": "serverless/function_app",
+  "azureFunctions.deploySubpath": "serverless/function_app",
+  "azureFunctions.projectLanguage": "Python",
+  "azureFunctions.projectLanguageModel": 2,
+  "azureFunctions.projectRuntime": "~4",
+  "azureFunctions.scmDoBuildDuringDeployment": true
+}

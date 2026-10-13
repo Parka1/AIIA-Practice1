@@ -1,0 +1,4 @@
+azure-functions
+azure-storage-blob
+pillow>=10.1  # ImageFont.load_default(size=...)
+tzdata  # zoneinfo data for Europe/Madrid, in case the image has no system tz database

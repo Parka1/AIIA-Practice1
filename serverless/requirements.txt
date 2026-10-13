@@ -1,2 +1,2 @@
 -r ../common/requirements.txt
-azure-storage-blob
+-r function_app/requirements.txt

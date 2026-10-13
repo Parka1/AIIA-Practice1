@@ -1,0 +1,10 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "<storage account connection string>",
+    "FRAMES_STORAGE": "<storage account connection string>",
+    "AZURE_VISION_ENDPOINT": "https://<name>.cognitiveservices.azure.com/",
+    "AZURE_VISION_KEY": "<AI Vision key>",
+    "VISION_MIN_CONFIDENCE": "0.5"
+  }
+}

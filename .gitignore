@@ -9,3 +9,4 @@ __pycache__/
 yolov8n.pt
 *.pdf
 credentials.env
+local.settings.json

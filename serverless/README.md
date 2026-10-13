@@ -70,3 +70,46 @@ the service again.
 ```sh
 .venv/Scripts/python -m unittest serverless.tests.test_vision
 ```
+
+## Azure Function (Tasks 3.3 and 3.5)
+
+`function_app/` is a Python v2 Azure Functions project for the Flex Consumption
+plan. `process_raw_frame` is a blob trigger on `raw-frames/{name}` whose source
+is an Event Grid subscription (the only blob trigger in Flex Consumption). For
+every frame it calls AI Vision, draws the people with Pillow and writes to the
+`$web` container only:
+
+| Blob in `$web` | Content |
+|---|---|
+| `frames/<frame_id>.jpg` | frame with the detected people drawn |
+| `data/results.csv` | common results format, `architecture=serverless` |
+| `data/metrics.csv` | per-frame timings: start delay (upload + Event Grid + cold start), AI Vision call, drawing, storage, cold start flag, HTTP 429 retries |
+
+Both CSV files are append blobs, so concurrent instances never overwrite each
+other's rows. AI Vision errors (e.g. HTTP 429 after the retries) are recorded in
+`metrics.csv` and the frame is not retried.
+
+The project is deployed on its own, so it carries copies of
+`common/results.py` and `serverless/vision.py`; `tests/test_function.py` fails
+if they get out of date. App settings (see `local.settings.example.json`):
+`FRAMES_STORAGE`, `AZURE_VISION_ENDPOINT`, `AZURE_VISION_KEY` and, optionally,
+`VISION_MIN_CONFIDENCE`. The real `local.settings.json` is git-ignored.
+
+**Recursion guard.** The function only listens to `raw-frames`, the event
+subscription only forwards `Blob Created` events whose subject begins with
+`/blobServices/default/containers/raw-frames/blobs/` and ends with `.jpg`,
+and the function only writes to `$web`.
+
+## Static website (Task 3.1)
+
+`web/index.html` is the dashboard, served from the `$web` container at
+<https://aiiap1serverlessb.z50.web.core.windows.net/>. It reads
+`data/results.csv` and `data/metrics.csv` every 5 seconds. Publish it (and
+create the empty CSV files) with:
+
+```sh
+.venv/Scripts/python -m serverless.deploy_web
+```
+
+`--reset-data` deletes the results and processed frames first, for a clean
+measurement run.
