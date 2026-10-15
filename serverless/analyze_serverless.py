@@ -25,7 +25,7 @@ from statistics import mean, median
 
 REPORT = Path("report")
 DATA = REPORT / "data"
-IMAGES = REPORT / "images"
+IMAGES = REPORT / "images" / "Section_3"
 FRAMES = REPORT / "part3_frames"
 RESULTS_CSV = DATA / "part3_serverless_results.csv"
 METRICS_CSV = DATA / "part3_serverless_metrics.csv"
