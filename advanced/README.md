@@ -1,51 +1,29 @@
-# Advanced task 3: client-side optimizations
+# Advanced task 3: optimizations
 
-The optimizations live in `common/optimizations.py`, so every architecture can
-use them before sending a frame:
+Client-side improvements in `common/optimizations.py`, applied before a frame
+is sent, so they work for any architecture:
 
-- `resize_to_width(frame, width)`: lower the resolution.
-- `encode_jpeg(frame, quality)`: JPEG compression.
-- `MotionDetector(min_changed, region).should_send(frame)`: skip frames without
-  motion. `MOTION_REGIONS` holds the area of each camera where people move.
-- `enhance_clahe(frame)` / `enhance_gamma(frame)`: brighten shaded areas.
-- `LightingController(hold_frames).update(n_people)`: lighting decision with hysteresis.
+| Function | What it does | Result in the report |
+|---|---|---|
+| `resize_to_width`, `encode_jpeg` | Lower resolution / JPEG quality | 960 px: -67% bytes, recall -2 points |
+| `MotionDetector.should_send` | Skips frames without motion (sends one per minute anyway) | 38% of frames skipped by day, ~70% at night |
+| `enhance_clahe`, `enhance_gamma` | Brighten shaded areas | No real gain; not used |
+| `LightingController` | Lights off only after N frames without people (hysteresis) | 30 s hold: no flicker, lights on ~99% of the occupied time |
 
-The serverless upload script exposes them as options:
-
-```sh
-.venv/Scripts/python -m serverless.upload_frames --width 960 --quality 70 --motion 0.005
-```
+In the serverless uploader:
+`python -m serverless.upload_frames --width 960 --quality 85 --motion 0.002`
 
 ## Evaluation (offline, on saved frames)
 
-Run from the repository root:
-
 ```sh
-# Resolution and JPEG quality sweeps on the 20 frames with manual boxes (report/part3_frames)
-.venv/Scripts/python -m advanced.evaluate_bandwidth            # YOLOv8n only
-.venv/Scripts/python -m advanced.evaluate_bandwidth --vision   # also AI Vision (responses cached)
-
-# Shadow enhancement on the same 20 frames
-.venv/Scripts/python -m advanced.evaluate_enhancement --vision
-
-# Motion detection and lighting hysteresis on continuous captures
-# (report/advanced3_sequences/<day|night>/<camera>)
-.venv/Scripts/python -m advanced.evaluate_motion
-.venv/Scripts/python -m advanced.evaluate_hysteresis
+python -m advanced.evaluate_bandwidth --vision     # resolution and JPEG sweeps
+python -m advanced.evaluate_enhancement --vision   # CLAHE / gamma
+python -m advanced.evaluate_motion                 # motion detection thresholds
+python -m advanced.evaluate_hysteresis             # lighting hold times
 ```
 
-Sequences are captured locally without uploading anything:
+- The first two scripts score detections against the manual boxes of the 20 frames of the serverless run (`report/data/part3_ground_truth_boxes.json`, IoU >= 0.3). Without `--vision` only YOLO is used. AI Vision responses are cached, so repeating a script costs no quota.
+- Motion and hysteresis use 10-minute sequences captured with `python common/capture.py --count 120 --out report/advanced3_sequences/<day|night>/<camera>`.
+- The results go to `report/data/advanced3_*.csv` and the figures to `report/images/Advanced_3/`.
 
-```sh
-cd common
-../.venv/Scripts/python capture.py --cam santa_pola --interval 5 --count 120 --out ../report/advanced3_sequences/day/santa_pola
-```
-
-Detection is scored against `report/data/part3_ground_truth_boxes.json`: a
-detection matches a person when IoU >= 0.3 (`advanced/detection_metrics.py`).
-Results are written to `report/data/advanced3_*.csv` and the figures to
-`report/images/Advanced_3/`.
-
-```sh
-.venv/Scripts/python -m unittest advanced.tests.test_optimizations
-```
+Tests: `python -m unittest advanced.tests.test_optimizations`

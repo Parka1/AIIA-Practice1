@@ -1,125 +1,53 @@
 # common
 
-Code shared by every architecture (local, VM, serverless).
+Code shared by every architecture.
 
-```
-pip install -r common/requirements.txt
-```
+## capture.py: webcam frames
 
-## capture.py: getting frames
-
-### Saving frames to disk
-
-Run from the repository root:
-
-```
-python common/capture.py
-```
-
-This saves one frame from the default camera (`santa_pola`) every 5 seconds into `frames/` until you press `Ctrl+C`. `grazalema` is available for the Part 2 comparison; `benidorm_poniente`, `benidorm_levante`, `madrid_alcala`, `benalmadena`, `la_orotava`, `villafranca_del_bierzo` and `calafell` are additional Part 4 video streams. Six further Part 4 sources use Skyline's live-preview JPEGs: `alicante_almadraba`, `barcelona_port`, `sevilla_plaza`, `formentera_es_pujols`, `cristosende_preview` and `alhambra_preview`. Each frame is printed as it is saved:
-
-```
-[20:29:15] santa_pola_20260924T202915035.jpg 1920x1080 (1588 ms)
-[20:29:19] santa_pola_20260924T202919889.jpg 1920x1080 (1436 ms)
-```
-
-The time in brackets is Spanish time and the value in parentheses is how long the capture took. Files are named `<frame_id>.jpg`, the same `frame_id` used in the CSV, so saved frames can be matched with the results (e.g. for the ground truth). Each frame is a JPEG of about 750 KB.
-
-Arguments (all optional):
-
-| argument | default | what it does |
-|---|---|---|
-| `--cam` | `santa_pola` | Camera to capture from. Must be one of the ids in `CAMERAS`. |
-| `--interval` | `5` | Seconds between frames. A capture takes ~1.5 s, so values below that just capture as fast as possible. If a capture takes longer than the interval, the next one starts immediately and the missed slots are skipped, not caught up. |
-| `--count` | `0` | Number of frames to save before stopping. `0` means keep going until `Ctrl+C`. |
-| `--out` | `frames` | Folder where the JPEG files are saved. It is created if it doesn't exist. Relative paths are relative to the folder you run the command from. |
-
-Examples:
-
-```
-# 50 frames, one every 5 s (~4 minutes), e.g. to label the ground truth
-python common/capture.py --count 50 --out ground_truth
-
-# capture from the Grazalema plaza webcam instead of Santa Pola
+```sh
+python common/capture.py                                   # santa_pola, one frame every 5 s into frames/
 python common/capture.py --cam grazalema --count 10 --out frames-grazalema
-
-# capture a Madrid street webcam for the multi-camera experiment
-python common/capture.py --cam madrid_alcala --count 10 --out frames-madrid
-
-# capture another Benidorm webcam for the multi-camera experiment
-python common/capture.py --cam benidorm_levante --count 10 --out frames-levante
-
-# one frame every 30 s until Ctrl+C
-python common/capture.py --interval 30
 ```
 
-If a capture fails (network error, camera down), the error is printed and the loop goes on with the next frame. `python common/capture.py --help` shows the argument list.
+Options: `--cam`, `--interval` (s), `--count` (0 = until Ctrl+C), `--out`.
+Camera ids are the keys of `CAMERAS`; the video streams are `santa_pola`,
+`grazalema`, `benidorm_poniente`, `benidorm_levante`, `madrid_alcala`,
+`benalmadena`, `la_orotava`, `villafranca_del_bierzo` and `calafell`. The
+`*_preview` and other `.jpg` sources are low-resolution snapshots, only for
+load tests.
 
-`frames/` is in `.gitignore`, so saved frames are not committed. Use another folder with `--out` for frames that should be shared, such as the ground truth set.
-
-### Using it from code
+From code:
 
 ```python
-import sys
-sys.path.append("../common")  # path to this folder
-
-from capture import CAMERAS, CaptureError, get_frame
-
-frame = get_frame(CAMERAS["santa_pola"])  # BGR numpy array, 1920x1080
+from common.capture import CAMERAS, get_frame, LiveFrameReader
+frame = get_frame(CAMERAS["santa_pola"])     # one BGR frame (~1.5 s: opens and closes the stream)
+reader = LiveFrameReader(CAMERAS["santa_pola"]); reader.start()
+frame = reader.latest_frame()                # keeps the stream open: use it to hold a 5 s cadence
 ```
 
-- `get_frame(cam_url)` opens the camera, reads one frame and closes it (~1.5 s for the Skyline stream). It raises `CaptureError` if the camera can't be read, so wrap it in `try/except` inside capture loops.
-- `LiveFrameReader(cam_url)` keeps a video stream open on a background thread and provides its latest decoded frame. Use it when sampling HLS sources on a fixed interval; it rejects snapshot-image URLs and raises `CaptureError` if it cannot provide a recent frame.
-- `CAMERAS` maps a camera id to its URL. It contains `santa_pola` (default), `grazalema` (Part 2 comparison), eight verified Part 4 video streams, and six Skyline live-preview JPEGs for load-only testing. The id is the `cam_id` used in the CSV.
-- Supported URLs: SkylineWebcams pages, snapshot images (`.jpg`, `.jpeg`, `.png`) and anything OpenCV can open directly (MJPEG, RTSP, `.m3u8`, video files).
+SkylineWebcams serves HLS behind a temporary token: `get_frame` reads the token
+from the camera page, caches it for 60 s and retries with a new one when the
+stream only shows the Skyline logo. Never request the `livee.m3u8` URL of the
+page: it is a decoy that invalidates the token.
 
-### How the SkylineWebcams capture works
+## results.py: common CSV format
 
-Skyline doesn't serve an MJPEG stream like the teaching team's `grabber.py` example. It serves an HLS stream (video split into ~3 s chunks) protected by a temporary token:
-
-- The page contains the stream address with a token: `livee.m3u8?a=<token>`. `get_frame` downloads the page, extracts the token and opens `https://hd-auth.skylinewebcams.com/live.m3u8?a=<token>` with OpenCV.
-- **Decoy URL:** the address in the page (`livee.m3u8`, with two e's) is a trap. Requesting it invalidates the token and from then on the stream only shows the Skyline logo. The code never requests it and uses `live.m3u8` instead.
-- **Token lifetime:** tokens stop working after 2-4 minutes. The token is cached for 60 s and a new one is fetched whenever the stream fails.
-- **Logo detection:** if a frame is the Skyline logo (more than 60% white pixels; the logo is ~87% white, real frames ~5%), it is discarded and the capture is retried once with a new token.
-- The page also has a thumbnail image (`live4828.jpg`), but it is only 344x193, too small to detect people.
-
-### Limitations
-
-- `get_frame()` opens the stream, reads one frame and closes it. This is convenient for occasional captures, but repeated HLS connection setup can make a five-second interval drift. `LiveFrameReader` keeps the stream open and drains decoded frames continuously so the caller can sample a recent frame on schedule.
-- The frame returned is a few seconds behind real time, because of how HLS streams work. It doesn't matter for counting people.
-- When capturing several cameras at the same time (Part 4), call `get_frame` from one thread per camera, or the calls add up (~1.5 s each).
-
-## results.py: the common CSV format
-
-| column | meaning |
-|---|---|
-| `timestamp` | frame capture time, ISO 8601 in Spanish time (Europe/Madrid) with its UTC offset (`2026-09-24T20:10:05.123+02:00`) |
-| `architecture` | `local`, `vm` or `serverless` |
-| `cam_id` | camera id in `CAMERAS` |
-| `frame_id` | `<cam_id>_<capture time in Spanish time>`, e.g. `santa_pola_20260924T201005123`. It is the same for the same frame in every architecture |
-| `n_people` | people detected |
-| `n_vehicles` | vehicles detected (empty if not computed) |
-| `response_time_ms` | end-to-end: frame captured → result stored |
-| `inference_ms` | model / AI Vision call only (empty if unknown) |
-| `frame_bytes` | size of the encoded image sent or processed (empty if n/a) |
-
-Take the capture time immediately after `get_frame()` or `LiveFrameReader.latest_frame()` returns, so encoding, upload and processing are left out of `response_time_ms`. Use the same timestamp boundary across architectures.
+`timestamp, architecture, cam_id, frame_id, n_people, n_vehicles,
+response_time_ms, inference_ms, frame_bytes`, one row per frame.
+`frame_id` is `<cam_id>_<capture time>` (e.g. `santa_pola_20260924T201005123`)
+and identifies the same frame in every architecture. Times are in Spanish time.
+`response_time_ms` goes from capture to result stored.
 
 ```python
-from results import Result, append_result, now_local
-
-frame = get_frame(CAMERAS["santa_pola"])
-captured_at = now_local()
-# ... detect ...
-append_result("results/local.csv", Result(
-    timestamp=captured_at, architecture="local", cam_id="santa_pola",
-    n_people=4, n_vehicles=12, response_time_ms=850.3, inference_ms=410.2,
-    frame_bytes=312455,
-))
+from common.results import Result, append_result, now_local
+append_result("results/local.csv", Result(timestamp=now_local(), architecture="local",
+              cam_id="santa_pola", n_people=3, response_time_ms=850.0))
 ```
 
-- `frame_id` is filled in from `cam_id` and `timestamp`. When the capture time must travel with the image (VM request, blob name), send `make_frame_id(...)` and recover the time on the other side with `parse_frame_id(...)`.
-- `format_csv(result, header=False)` returns the row as text, e.g. to append it to an Azure append blob.
-- `load_results("results/local.csv", "results/vm.csv", ...)` merges several CSV files into one pandas DataFrame, for the report plots.
-- All times use Spanish time (Europe/Madrid), not the machine's time zone, so the VM and the Azure Function (which run in UTC) write the same times as the local machine.
-- `results.py` only uses the standard library, so it can be copied as is to the VM or the Azure Function. On Windows it also needs `tzdata` (included in `requirements.txt`).
+It only uses the standard library, so it is copied as is to the VM and the
+Azure Function.
+
+## optimizations.py
+
+Resize, JPEG compression, motion detection and lighting hysteresis, applied on
+the client before sending a frame. See [`advanced/`](../advanced/README.md).
