@@ -25,6 +25,7 @@ SkylineWebcams notes:
 
 import argparse
 import re
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -38,10 +39,23 @@ if __package__:
 else:
     from results import make_frame_id, now_local
 
-# Camera id -> URL. The first one is the main camera; add the Part 4 ones here.
+# Camera id -> URL. The first one is the main camera; further cameras support Parts 2-4.
 CAMERAS = {
     "santa_pola": "https://www.skylinewebcams.com/es/webcam/espana/comunidad-valenciana/santa-pola/paseo-maritimo.html",
     "grazalema": "https://www.skylinewebcams.com/es/webcam/espana/andalucia/cadiz/grazalema.html",
+    "benidorm_poniente": "https://www.skylinewebcams.com/es/webcam/espana/comunidad-valenciana/alicante/benidorm-playa-poniente-sur.html",
+    "benidorm_levante": "https://www.skylinewebcams.com/es/webcam/espana/comunidad-valenciana/alicante/benidorm-playa-levante.html",
+    "madrid_alcala": "https://www.skylinewebcams.com/es/webcam/espana/comunidad-de-madrid/madrid/calle-alcala.html",
+    "benalmadena": "https://www.skylinewebcams.com/es/webcam/espana/andalucia/malaga/benalmadena.html",
+    "la_orotava": "https://www.skylinewebcams.com/es/webcam/espana/canarias/santa-cruz-de-tenerife/la-orotava.html",
+    "villafranca_del_bierzo": "https://www.skylinewebcams.com/es/webcam/espana/castilla-y-leon/leon/villafranca-del-bierzo.html",
+    "calafell": "https://www.skylinewebcams.com/es/webcam/espana/cataluna/tarragona/calafell.html",
+    "alicante_almadraba": "https://cdn.skylinewebcams.com/live924.jpg",
+    "barcelona_port": "https://cdn.skylinewebcams.com/live3759.jpg",
+    "sevilla_plaza": "https://cdn.skylinewebcams.com/live823.jpg",
+    "formentera_es_pujols": "https://cdn.skylinewebcams.com/live4727.jpg",
+    "cristosende_preview": "https://cdn.skylinewebcams.com/live5841.jpg",
+    "alhambra_preview": "https://cdn.skylinewebcams.com/live372.jpg",
 }
 
 USER_AGENT = (
@@ -60,6 +74,95 @@ _stream_cache = {}  # Skyline page URL -> (stream URL, time.monotonic() when res
 
 class CaptureError(RuntimeError):
     """No valid frame could be obtained from a camera."""
+
+
+class LiveFrameReader:
+    """Continuously read an HLS camera and expose its most recent frame."""
+
+    def __init__(self, cam_url: str):
+        suffix = urllib.parse.urlparse(cam_url).path.lower()
+        if suffix.endswith((".jpg", ".jpeg", ".png")):
+            raise ValueError(
+                "continuous capture requires a video stream, not a snapshot URL"
+            )
+        self._cam_url = cam_url
+        self._skyline_page = "skylinewebcams.com" in cam_url and cam_url.endswith(".html")
+        self._condition = threading.Condition()
+        self._stop = threading.Event()
+        self._frame: np.ndarray | None = None
+        self._frame_at = 0.0
+        self._error = "stream has not produced a frame"
+        self._thread = threading.Thread(target=self._read_loop, daemon=True)
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def latest_frame(self, timeout: float = 15, max_age_s: float = 5) -> np.ndarray:
+        deadline = time.monotonic() + timeout
+        with self._condition:
+            while True:
+                age = time.monotonic() - self._frame_at
+                if self._frame is not None and age <= max_age_s:
+                    return self._frame.copy()
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise CaptureError(
+                        f"no recent frame from {self._cam_url}: {self._error}"
+                    )
+                self._condition.wait(remaining)
+
+    def close(self) -> None:
+        self._stop.set()
+        with self._condition:
+            self._condition.notify_all()
+        if self._thread.ident is not None:
+            self._thread.join(timeout=STREAM_TIMEOUT_MS / 1000 + 2)
+
+    def _read_loop(self) -> None:
+        while not self._stop.is_set():
+            capture = None
+            try:
+                stream_url = (
+                    _skyline_stream_url(self._cam_url, refresh=True)
+                    if self._skyline_page
+                    else self._cam_url
+                )
+                capture = cv2.VideoCapture(
+                    stream_url,
+                    cv2.CAP_FFMPEG,
+                    [
+                        cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, STREAM_TIMEOUT_MS,
+                        cv2.CAP_PROP_READ_TIMEOUT_MSEC, STREAM_TIMEOUT_MS,
+                    ],
+                )
+                if not capture.isOpened():
+                    raise CaptureError("could not open video stream")
+                frames_until_logo_check = 0
+                while not self._stop.is_set():
+                    ok, frame = capture.read()
+                    if not ok:
+                        raise CaptureError("video stream stopped returning frames")
+                    if self._skyline_page and frames_until_logo_check == 0:
+                        if _is_skyline_logo(frame):
+                            raise CaptureError("the stream only shows the Skyline logo")
+                        frames_until_logo_check = 24
+                    elif self._skyline_page:
+                        frames_until_logo_check -= 1
+                    if self._stop.is_set():
+                        break
+                    with self._condition:
+                        self._frame = frame
+                        self._frame_at = time.monotonic()
+                        self._error = ""
+                        self._condition.notify_all()
+            except (CaptureError, cv2.error) as error:
+                with self._condition:
+                    self._error = str(error)
+                    self._condition.notify_all()
+            finally:
+                if capture is not None:
+                    capture.release()
+            self._stop.wait(0.5)
 
 
 def get_frame(cam_url: str) -> np.ndarray:

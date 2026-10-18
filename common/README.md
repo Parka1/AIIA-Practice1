@@ -16,7 +16,7 @@ Run from the repository root:
 python common/capture.py
 ```
 
-This saves one frame from the default camera (`santa_pola`) every 5 seconds into `frames/` until you press `Ctrl+C`. The alternative `grazalema` camera is available for the Part 2 comparison. Each frame is printed as it is saved:
+This saves one frame from the default camera (`santa_pola`) every 5 seconds into `frames/` until you press `Ctrl+C`. `grazalema` is available for the Part 2 comparison; `benidorm_poniente`, `benidorm_levante`, `madrid_alcala`, `benalmadena`, `la_orotava`, `villafranca_del_bierzo` and `calafell` are additional Part 4 video streams. Six further Part 4 sources use Skyline's live-preview JPEGs: `alicante_almadraba`, `barcelona_port`, `sevilla_plaza`, `formentera_es_pujols`, `cristosende_preview` and `alhambra_preview`. Each frame is printed as it is saved:
 
 ```
 [20:29:15] santa_pola_20260924T202915035.jpg 1920x1080 (1588 ms)
@@ -43,6 +43,12 @@ python common/capture.py --count 50 --out ground_truth
 # capture from the Grazalema plaza webcam instead of Santa Pola
 python common/capture.py --cam grazalema --count 10 --out frames-grazalema
 
+# capture a Madrid street webcam for the multi-camera experiment
+python common/capture.py --cam madrid_alcala --count 10 --out frames-madrid
+
+# capture another Benidorm webcam for the multi-camera experiment
+python common/capture.py --cam benidorm_levante --count 10 --out frames-levante
+
 # one frame every 30 s until Ctrl+C
 python common/capture.py --interval 30
 ```
@@ -63,7 +69,8 @@ frame = get_frame(CAMERAS["santa_pola"])  # BGR numpy array, 1920x1080
 ```
 
 - `get_frame(cam_url)` opens the camera, reads one frame and closes it (~1.5 s for the Skyline stream). It raises `CaptureError` if the camera can't be read, so wrap it in `try/except` inside capture loops.
-- `CAMERAS` maps a camera id to its URL. It currently contains `santa_pola` (default) and `grazalema` (comparison camera); add further Part 4 cameras there. The id is the `cam_id` used in the CSV.
+- `LiveFrameReader(cam_url)` keeps a video stream open on a background thread and provides its latest decoded frame. Use it when sampling HLS sources on a fixed interval; it rejects snapshot-image URLs and raises `CaptureError` if it cannot provide a recent frame.
+- `CAMERAS` maps a camera id to its URL. It contains `santa_pola` (default), `grazalema` (Part 2 comparison), eight verified Part 4 video streams, and six Skyline live-preview JPEGs for load-only testing. The id is the `cam_id` used in the CSV.
 - Supported URLs: SkylineWebcams pages, snapshot images (`.jpg`, `.jpeg`, `.png`) and anything OpenCV can open directly (MJPEG, RTSP, `.m3u8`, video files).
 
 ### How the SkylineWebcams capture works
@@ -78,7 +85,7 @@ Skyline doesn't serve an MJPEG stream like the teaching team's `grabber.py` exam
 
 ### Limitations
 
-- Each call opens the stream, reads one frame and closes it, which takes ~1.5 s. That is plenty for one frame every 5 s, but it can't reach the 0.5 s rate given as an example in Part 3. That would need a reader that keeps the stream open in a background thread.
+- `get_frame()` opens the stream, reads one frame and closes it. This is convenient for occasional captures, but repeated HLS connection setup can make a five-second interval drift. `LiveFrameReader` keeps the stream open and drains decoded frames continuously so the caller can sample a recent frame on schedule.
 - The frame returned is a few seconds behind real time, because of how HLS streams work. It doesn't matter for counting people.
 - When capturing several cameras at the same time (Part 4), call `get_frame` from one thread per camera, or the calls add up (~1.5 s each).
 
@@ -96,7 +103,7 @@ Skyline doesn't serve an MJPEG stream like the teaching team's `grabber.py` exam
 | `inference_ms` | model / AI Vision call only (empty if unknown) |
 | `frame_bytes` | size of the encoded image sent or processed (empty if n/a) |
 
-Take the capture time right after `get_frame()` returns, so capture time is left out of `response_time_ms`. It's the same for every architecture.
+Take the capture time immediately after `get_frame()` or `LiveFrameReader.latest_frame()` returns, so encoding, upload and processing are left out of `response_time_ms`. Use the same timestamp boundary across architectures.
 
 ```python
 from results import Result, append_result, now_local
