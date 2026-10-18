@@ -116,3 +116,49 @@ The evaluator reports overall and per-camera exact-count accuracy, mean
 absolute count error, root mean square count error and signed count bias. This
 is a frame-count evaluation, not box-level precision or recall; those require
 manually labelled boxes and a specified matching rule.
+
+## Part 4: VM multi-camera capacity
+
+The capture map includes eight independently verified Part 4 SkylineWebcams
+video streams (Santa Pola, both Benidorm beaches, Madrid Calle de Alcalá,
+Benalmádena, La Orotava, Villafranca del Bierzo and Calafell), plus six
+periodically refreshed low-resolution live-preview JPEGs for load-only
+testing. For Task 4.1 cadence measurements, select the video streams only and
+use `--persistent-streams` so each worker samples a recent decoded frame at
+the configured interval. Snapshot JPEGs are not fresh enough to establish a
+five-second webcam cadence. A finite `--count` is the number of successful
+frames for each camera; optional local copies of the uploaded results and
+original JPEG frames make the run reproducible:
+
+```sh
+AIIA_VM_URL=http://VM_PUBLIC_IP \
+  .venv/bin/python -m local_vm.send_to_vm --persistent-streams \
+  --cams santa_pola benidorm_poniente benidorm_levante madrid_alcala \
+         benalmadena la_orotava villafranca_del_bierzo calafell \
+  --interval 5 --count 10 \
+  --results-csv report/data/part4_vm_scale_results.csv \
+  --save-frames-dir report/part4_frames
+```
+
+Increase the camera set gradually and use the VM dashboard API before and
+after each batch. It reports per-request CPU, process RSS and system RAM,
+JPEG payload sizes and response times. The local CSV records each successful
+frame in the shared results format. `--cams` starts one capture/upload worker
+per source; pair it with `--persistent-streams` for HLS sources to keep each
+video connection open and sample a recent decoded frame for every upload.
+This avoids repeatedly reopening HLS streams, which can delay frame
+acquisition and break the five-second cadence. Snapshot JPEG sources cannot
+use this option because their refresh rate is lower than the required cadence.
+The interval is measured from the capture timestamp; uploads that take longer
+than the interval delay the next sample instead of causing a catch-up burst.
+The VM's single inference lock serializes YOLO requests, so capture timestamps
+and response times reveal when work starts queueing.
+The sender stops with a clear error after three consecutive capture or upload
+failures for any selected camera rather than leaving a finite experiment stuck
+waiting indefinitely for an unavailable stream. The JPEG preview sources
+refresh less often than the five-second request cadence and are not suitable
+for detection-accuracy evaluation.
+For a controlled VM-only capacity test, `--replay-dir` accepts one saved
+`<cam_id>.jpg` per selected camera and reuses those bytes at each interval;
+this removes webcam retrieval time from the measurement without claiming that
+the replayed images are new live frames.
