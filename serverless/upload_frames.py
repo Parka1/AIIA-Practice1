@@ -9,6 +9,10 @@ the function writes its results there, and a trigger on $web would make the
 function trigger itself recursively.
 
 Every upload is also logged locally (capture and upload times) for Task 3.6.
+
+Optional client-side optimizations (Advanced task 3, common/optimizations.py):
+--width lowers the resolution and --motion skips frames without motion, so
+fewer bytes are uploaded and fewer AI Vision calls are made.
 """
 
 import argparse
@@ -16,11 +20,11 @@ import csv
 import time
 from pathlib import Path
 
-import cv2
 from azure.core.exceptions import AzureError
 from azure.storage.blob import BlobServiceClient, ContentSettings
 
 from common.capture import CAMERAS, CaptureError, get_frame
+from common.optimizations import MOTION_REGIONS, MotionDetector, encode_jpeg, resize_to_width
 from common.results import make_frame_id, now_local
 from serverless.credentials import load_credentials
 
@@ -47,6 +51,9 @@ def main() -> None:
     parser.add_argument("--interval", type=float, default=5.0, help="seconds between frames (default: 5)")
     parser.add_argument("--count", type=int, default=0, help="frames to upload, 0 = until Ctrl+C")
     parser.add_argument("--quality", type=int, default=85, help="JPEG quality (default: 85, as in Part 2)")
+    parser.add_argument("--width", type=int, default=0, help="resize frames to this width in px (default: keep 1920)")
+    parser.add_argument("--motion", type=float, default=0.0, metavar="FRACTION",
+                        help="only upload frames with at least this fraction of changed pixels, e.g. 0.005 (default: off)")
     parser.add_argument("--container", default=DEFAULT_CONTAINER, help=f"raw container (default: {DEFAULT_CONTAINER})")
     parser.add_argument("--log", type=Path, default=Path("results/serverless_uploads.csv"))
     args = parser.parse_args()
@@ -65,7 +72,8 @@ def main() -> None:
     if not container.exists():
         raise SystemExit(f"container {args.container!r} does not exist in the storage account")
 
-    uploaded = 0
+    motion = MotionDetector(min_changed=args.motion, region=MOTION_REGIONS.get(args.cam)) if args.motion else None
+    uploaded = skipped = 0
     next_at = time.monotonic()
     try:
         while args.count == 0 or uploaded < args.count:
@@ -77,7 +85,15 @@ def main() -> None:
             else:
                 captured_at = now_local()
                 capture_ms = (time.perf_counter() - start) * 1000
-                image = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, args.quality])[1].tobytes()
+                if motion and not motion.should_send(frame):
+                    skipped += 1
+                    print(f"[{captured_at:%H:%M:%S}] no motion, frame skipped")
+                    next_at = max(next_at + args.interval, time.monotonic())
+                    time.sleep(max(0.0, next_at - time.monotonic()))
+                    continue
+                if args.width:
+                    frame = resize_to_width(frame, args.width)
+                image = encode_jpeg(frame, args.quality)
                 frame_id = make_frame_id(args.cam, captured_at)
                 upload_start = time.perf_counter()
                 try:
@@ -115,7 +131,7 @@ def main() -> None:
             time.sleep(max(0.0, next_at - time.monotonic()))
     except KeyboardInterrupt:
         pass
-    print(f"{uploaded} frames uploaded to {args.container}")
+    print(f"{uploaded} frames uploaded to {args.container}" + (f", {skipped} skipped without motion" if motion else ""))
 
 
 if __name__ == "__main__":
