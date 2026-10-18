@@ -113,3 +113,20 @@ create the empty CSV files) with:
 
 `--reset-data` deletes the results and processed frames first, for a clean
 measurement run.
+
+## Multi-camera capacity (Task 4.3)
+
+`upload_frames.py` accepts several cameras (`--cams`, one thread each); use
+`--persistent-streams` with them, as in the VM test of Part 4, to keep each HLS
+stream open and the five-second cadence. The staircase of the report runs the
+five Task 4.1 cameras from 1 to 5 at a time, ten frames per camera, waits for
+the function after each stage, and then fetches, analyzes and plots the run:
+
+```sh
+.venv/Scripts/python -m serverless.scale_serverless
+```
+
+That is 150 AI Vision calls. Use `--analyze` to repeat only the analysis, and
+`--stages`/`--count` for a shorter run. With the F0 tier (20 calls/min) one
+camera uses 12 calls/min, so from two cameras on the function gets HTTP 429:
+the run measures how many frames are still processed and how much later.

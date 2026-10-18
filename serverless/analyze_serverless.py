@@ -217,8 +217,11 @@ def print_detection() -> None:
         print(f"  (fill ground_truth_count in {COUNTS_CSV} to compute accuracy on these frames)")
 
 
-def print_costs(frames: list[dict]) -> None:
-    n = len(frames)
+def frame_costs(frames: list[dict]) -> tuple[dict, float]:
+    """Mean cost of each item per frame without free grants, and the mean billed function seconds.
+
+    `frames` need "function_ms" and "frame_bytes".
+    """
     gb = mean(f["frame_bytes"] for f in frames) / 1024**3
     # Flex Consumption bills at least 1 s per execution, then rounds up to 100 ms.
     billed_s = mean(max(1.0, -(-f["function_ms"] // 100) / 10) for f in frames)
@@ -230,6 +233,26 @@ def print_costs(frames: list[dict]) -> None:
         "Event Grid": PRICE["event_grid_operation"],
         "Inter-region transfer": gb * PRICE["inter_region_gb"],
     }
+    return per_frame, billed_s
+
+
+def monthly_costs(frames_per_month: int, per_frame: dict, billed_s: float) -> dict:
+    """Monthly cost of each item for `frames_per_month` frames, after the free grants."""
+    m = frames_per_month
+    return {
+        "AI Vision (S1)": m * per_frame["AI Vision (S1)"],
+        "Functions": max(0, m * billed_s * INSTANCE_GB - PRICE["function_free_gb_s"]) * PRICE["function_gb_s"]
+        + max(0, m - PRICE["function_free_executions"]) * PRICE["function_execution"],
+        "Storage operations": m * per_frame["Storage operations"],
+        "Event Grid": max(0, m - PRICE["event_grid_free"]) * PRICE["event_grid_operation"],
+        "Inter-region transfer": m * per_frame["Inter-region transfer"],
+    }
+
+
+def print_costs(frames: list[dict]) -> None:
+    n = len(frames)
+    gb = mean(f["frame_bytes"] for f in frames) / 1024**3
+    per_frame, billed_s = frame_costs(frames)
     total = sum(per_frame.values())
     print(f"\nCost per frame (no free grants), billed function time {billed_s:.1f} s")
     for item, cost in per_frame.items():
@@ -238,14 +261,7 @@ def print_costs(frames: list[dict]) -> None:
     print(f"  this run with AI Vision F0 and the free grants: $0 (AI Vision free tier, within Functions/Event Grid grants)")
 
     m = FRAMES_PER_MONTH
-    monthly = {
-        "AI Vision (S1)": m * PRICE["vision_call"],
-        "Functions": max(0, m * billed_s * INSTANCE_GB - PRICE["function_free_gb_s"]) * PRICE["function_gb_s"]
-        + max(0, m - PRICE["function_free_executions"]) * PRICE["function_execution"],
-        "Storage operations": m * per_frame["Storage operations"],
-        "Event Grid": max(0, m - PRICE["event_grid_free"]) * PRICE["event_grid_operation"],
-        "Inter-region transfer": m * per_frame["Inter-region transfer"],
-    }
+    monthly = monthly_costs(m, per_frame, billed_s)
     print(f"\nOne camera, one frame every 5 s for 30 days ({m:,} frames), with free grants")
     for item, cost in monthly.items():
         print(f"  {item:<26}${cost:,.2f}")
